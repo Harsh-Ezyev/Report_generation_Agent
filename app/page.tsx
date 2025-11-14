@@ -310,8 +310,9 @@ export default function Home() {
                 <CardContent>
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>Battery ID</TableHead>
+                  <TableRow>
+                    <TableHead>Battery ID</TableHead>
+                    <TableHead>Device ID</TableHead>
                         <TableHead>SOC Delta (%)</TableHead>
                         <TableHead>ODO Delta (km)</TableHead>
                         <TableHead>Status</TableHead>
@@ -324,6 +325,7 @@ export default function Home() {
                         return (
                           <TableRow key={battery.battery_id} className={status.bgColor}>
                             <TableCell className="font-medium">{battery.battery_id}</TableCell>
+                            <TableCell>{battery.device_id}</TableCell>
                             <TableCell>{battery.soc_delta.toFixed(2)}</TableCell>
                             <TableCell>{battery.odo_delta.toFixed(2)}</TableCell>
                             <TableCell>
@@ -358,8 +360,9 @@ export default function Home() {
                 <CardContent>
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>Battery ID</TableHead>
+                  <TableRow>
+                    <TableHead>Battery ID</TableHead>
+                    <TableHead>Device ID</TableHead>
                         <TableHead>SOC Delta (%)</TableHead>
                         <TableHead>ODO Delta (km)</TableHead>
                         <TableHead>Status</TableHead>
@@ -372,6 +375,7 @@ export default function Home() {
                         return (
                           <TableRow key={battery.battery_id} className={status.bgColor}>
                             <TableCell className="font-medium">{battery.battery_id}</TableCell>
+                            <TableCell>{battery.device_id}</TableCell>
                             <TableCell>{battery.soc_delta.toFixed(2)}</TableCell>
                             <TableCell>{battery.odo_delta.toFixed(2)}</TableCell>
                             <TableCell>
@@ -406,8 +410,9 @@ export default function Home() {
                 <CardContent>
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>Battery ID</TableHead>
+                  <TableRow>
+                    <TableHead>Battery ID</TableHead>
+                    <TableHead>Device ID</TableHead>
                         <TableHead>SOC Delta (%)</TableHead>
                         <TableHead>ODO Delta (km)</TableHead>
                         <TableHead>Status</TableHead>
@@ -420,6 +425,7 @@ export default function Home() {
                         return (
                           <TableRow key={battery.battery_id} className={status.bgColor}>
                             <TableCell className="font-medium">{battery.battery_id}</TableCell>
+                            <TableCell>{battery.device_id}</TableCell>
                             <TableCell>{battery.soc_delta.toFixed(2)}</TableCell>
                             <TableCell>{battery.odo_delta.toFixed(2)}</TableCell>
                             <TableCell>

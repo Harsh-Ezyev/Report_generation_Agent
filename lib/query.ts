@@ -33,6 +33,7 @@ export interface AggregatedDataPoint {
 
 export interface FirstLastRow {
   battery_id: string;
+  device_id: string;
   ts_first: string;
   battery_soc_pct_first: number;
   odo_meter_km_first: number;
@@ -50,6 +51,7 @@ export interface FleetSummary {
 
 export interface BatteryListItem {
   battery_id: string;
+  device_id: string;
   soc_delta: number;
   odo_delta: number;
 }
@@ -89,6 +91,7 @@ export async function getFirstLast(): Promise<FirstLastRow[]> {
   const sqlFirst = `
     SELECT DISTINCT ON (battery_id)
       battery_id,
+      device_id,
       ts,
       battery_soc_pct,
       odo_meter_km
@@ -100,6 +103,7 @@ export async function getFirstLast(): Promise<FirstLastRow[]> {
   const sqlLast = `
     SELECT DISTINCT ON (battery_id)
       battery_id,
+      device_id,
       ts,
       battery_soc_pct,
       odo_meter_km
@@ -110,6 +114,7 @@ export async function getFirstLast(): Promise<FirstLastRow[]> {
 
   const firstRows = await query<{
     battery_id: string;
+    device_id: string | null;
     ts: Date;
     battery_soc_pct: number;
     odo_meter_km: number;
@@ -117,29 +122,39 @@ export async function getFirstLast(): Promise<FirstLastRow[]> {
 
   const lastRows = await query<{
     battery_id: string;
+    device_id: string | null;
     ts: Date;
     battery_soc_pct: number;
     odo_meter_km: number;
   }>(sqlLast);
 
-  const firstMap = new Map(
+  type FirstLastInfo = {
+    ts: string;
+    battery_soc_pct: number;
+    odo_meter_km: number;
+    device_id: string | null;
+  };
+
+  const firstMap = new Map<string, FirstLastInfo>(
     firstRows.map((row) => [
       row.battery_id,
       {
         ts: formatInTimeZone(row.ts, "Asia/Kolkata", "yyyy-MM-dd'T'HH:mm:ssXXX"),
         battery_soc_pct: Number(row.battery_soc_pct) || 0,
         odo_meter_km: Number(row.odo_meter_km) || 0,
+        device_id: row.device_id || null,
       },
     ])
   );
 
-  const lastMap = new Map(
+  const lastMap = new Map<string, FirstLastInfo>(
     lastRows.map((row) => [
       row.battery_id,
       {
         ts: formatInTimeZone(row.ts, "Asia/Kolkata", "yyyy-MM-dd'T'HH:mm:ssXXX"),
         battery_soc_pct: Number(row.battery_soc_pct) || 0,
         odo_meter_km: Number(row.odo_meter_km) || 0,
+        device_id: row.device_id || null,
       },
     ])
   );
@@ -154,6 +169,7 @@ export async function getFirstLast(): Promise<FirstLastRow[]> {
     if (first && last) {
       result.push({
         battery_id: batteryId,
+        device_id: last.device_id || first.device_id || "",
         ts_first: first.ts,
         battery_soc_pct_first: first.battery_soc_pct,
         odo_meter_km_first: first.odo_meter_km,
@@ -207,6 +223,7 @@ export async function getBatteryList(): Promise<BatteryListItem[]> {
 
   return rows.map((row) => ({
     battery_id: row.battery_id,
+    device_id: row.device_id,
     soc_delta: Number(
       (row.battery_soc_pct_last - row.battery_soc_pct_first).toFixed(2)
     ),
