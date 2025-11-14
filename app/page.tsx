@@ -446,7 +446,7 @@ export default function Home() {
           <Card>
             <CardContent className="pt-6">
               <p className="text-muted-foreground">
-                {batteries?.error ? `Error: ${batteries.error}` : "No batteries found"}
+                    No batteries found
               </p>
             </CardContent>
           </Card>
