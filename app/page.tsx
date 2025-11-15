@@ -41,7 +41,10 @@ function getBatteryStatus(battery: BatteryListItem, noOdoBatteries: string[]): {
   bgColor: string;
   label: string;
 } {
-  if (noOdoBatteries.includes(battery.battery_id)) {
+  // Use an epsilon to treat values that round to 0.00 as zero
+  const ZERO_EPSILON = 0.005;
+
+  if (Math.abs(battery.odo_delta) < ZERO_EPSILON) {
     return {
       status: "red",
       color: "text-red-600 dark:text-red-500",
@@ -315,6 +318,7 @@ export default function Home() {
                     <TableHead>Device ID</TableHead>
                         <TableHead>SOC Delta (%)</TableHead>
                         <TableHead>ODO Delta (km)</TableHead>
+                        <TableHead>Total Cycles</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
@@ -328,6 +332,7 @@ export default function Home() {
                             <TableCell>{battery.device_id}</TableCell>
                             <TableCell>{battery.soc_delta.toFixed(2)}</TableCell>
                             <TableCell>{battery.odo_delta.toFixed(2)}</TableCell>
+                            <TableCell className="font-semibold">{battery.total_cycles.toFixed(2)}</TableCell>
                             <TableCell>
                               <span className={status.color}>{status.label}</span>
                             </TableCell>
@@ -365,6 +370,7 @@ export default function Home() {
                     <TableHead>Device ID</TableHead>
                         <TableHead>SOC Delta (%)</TableHead>
                         <TableHead>ODO Delta (km)</TableHead>
+                        <TableHead>Total Cycles</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
@@ -378,6 +384,7 @@ export default function Home() {
                             <TableCell>{battery.device_id}</TableCell>
                             <TableCell>{battery.soc_delta.toFixed(2)}</TableCell>
                             <TableCell>{battery.odo_delta.toFixed(2)}</TableCell>
+                            <TableCell className="font-semibold">{battery.total_cycles.toFixed(2)}</TableCell>
                             <TableCell>
                               <span className={status.color}>{status.label}</span>
                             </TableCell>
@@ -415,6 +422,7 @@ export default function Home() {
                     <TableHead>Device ID</TableHead>
                         <TableHead>SOC Delta (%)</TableHead>
                         <TableHead>ODO Delta (km)</TableHead>
+                        <TableHead>Total Cycles</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
@@ -428,6 +436,7 @@ export default function Home() {
                             <TableCell>{battery.device_id}</TableCell>
                             <TableCell>{battery.soc_delta.toFixed(2)}</TableCell>
                             <TableCell>{battery.odo_delta.toFixed(2)}</TableCell>
+                            <TableCell className="font-semibold">{battery.total_cycles.toFixed(2)}</TableCell>
                             <TableCell>
                               <span className={status.color}>{status.label}</span>
                             </TableCell>

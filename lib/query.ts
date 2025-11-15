@@ -54,6 +54,10 @@ export interface BatteryListItem {
   device_id: string;
   soc_delta: number;
   odo_delta: number;
+  cycles_last_24h: number;
+  cycles_last_7d: number;
+  cycles_last_30d: number;
+  total_cycles: number;
 }
 
 export interface AnomalyPoint {
@@ -206,8 +210,10 @@ export async function getFleetSummary(): Promise<FleetSummary> {
 
   const worstSocDelta = Math.min(...deltas.map((d) => d.soc_delta));
 
+  // Treat near-zero movement as zero based on rounding to 2 decimals
+  const ZERO_EPSILON = 0.005; // values that round to 0.00
   const noOdoBatteries = deltas
-    .filter((d) => d.odo_delta === 0)
+    .filter((d) => Math.abs(d.odo_delta) < ZERO_EPSILON)
     .map((d) => d.battery_id);
 
   return {
@@ -218,19 +224,104 @@ export async function getFleetSummary(): Promise<FleetSummary> {
   };
 }
 
+async function calculateCycles(
+  batteryId: string,
+  hours: number
+): Promise<number> {
+  // Validate hours to prevent SQL injection
+  const safeHours = Math.max(1, Math.min(8760, Math.floor(hours))); // Clamp between 1 and 8760 (1 year)
+  
+  const sql = `
+    SELECT ts, battery_soc_pct
+    FROM ${TABLE_NAME}
+    WHERE battery_id = $1
+      AND ts >= NOW() - INTERVAL '${safeHours} hours'
+      AND battery_soc_pct IS NOT NULL
+    ORDER BY ts ASC;
+  `;
+
+  const rows = await query<{
+    ts: Date;
+    battery_soc_pct: number;
+  }>(sql, [batteryId]);
+
+  if (rows.length < 2) {
+    return 0;
+  }
+
+  let totalDrop = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const prevSoc = Number(rows[i - 1].battery_soc_pct) || 0;
+    const currSoc = Number(rows[i].battery_soc_pct) || 0;
+    const drop = Math.max(0, prevSoc - currSoc);
+    totalDrop += drop;
+  }
+
+  return Number((totalDrop / 100).toFixed(3));
+}
+
+async function calculateTotalCycles(batteryId: string): Promise<number> {
+  const sql = `
+    SELECT ts, battery_soc_pct
+    FROM ${TABLE_NAME}
+    WHERE battery_id = $1
+      AND battery_soc_pct IS NOT NULL
+    ORDER BY ts ASC;
+  `;
+
+  const rows = await query<{
+    ts: Date;
+    battery_soc_pct: number;
+  }>(sql, [batteryId]);
+
+  if (rows.length < 2) {
+    return 0;
+  }
+
+  let totalDrop = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const prevSoc = Number(rows[i - 1].battery_soc_pct) || 0;
+    const currSoc = Number(rows[i].battery_soc_pct) || 0;
+    const drop = Math.max(0, prevSoc - currSoc);
+    totalDrop += drop;
+  }
+
+  return Number((totalDrop / 100).toFixed(3));
+}
+
 export async function getBatteryList(): Promise<BatteryListItem[]> {
   const rows = await getFirstLast();
+  await ensureCycleTallyTable();
+  const tallyRows = await query<{ battery_id: string; total_cycles: number }>(
+    `SELECT battery_id, total_cycles::float AS total_cycles FROM cycle_tally;`
+  );
+  const tallyMap = new Map<string, number>();
+  for (const t of tallyRows) {
+    tallyMap.set(t.battery_id, Number(t.total_cycles) || 0);
+  }
 
-  return rows.map((row) => ({
-    battery_id: row.battery_id,
-    device_id: row.device_id,
-    soc_delta: Number(
-      (row.battery_soc_pct_last - row.battery_soc_pct_first).toFixed(2)
-    ),
-    odo_delta: Number(
-      (row.odo_meter_km_last - row.odo_meter_km_first).toFixed(2)
-    ),
-  }));
+  const batteryList: BatteryListItem[] = [];
+
+  for (const row of rows) {
+    const totalCycles = tallyMap.get(row.battery_id) ?? 0;
+
+    batteryList.push({
+      battery_id: row.battery_id,
+      device_id: row.device_id || "",
+      soc_delta: Number(
+        (row.battery_soc_pct_last - row.battery_soc_pct_first).toFixed(2)
+      ),
+      odo_delta: Number(
+        (row.odo_meter_km_last - row.odo_meter_km_first).toFixed(2)
+      ),
+      cycles_last_24h: 0,
+      cycles_last_7d: 0,
+      cycles_last_30d: 0,
+      total_cycles: Number(totalCycles.toFixed(2)),
+    });
+  }
+
+  return batteryList;
 }
 
 export async function getBatteryAggregated(
@@ -297,5 +388,149 @@ export async function getBatteryAnomalies(
   }
 
   return anomalies;
+}
+
+
+export interface CycleTallyRow {
+  battery_id: string;
+  total_cycles: number;
+  last_ts: string | null;
+  updated_at: string;
+}
+
+export async function ensureCycleTallyTable(): Promise<void> {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS cycle_tally (
+      battery_id TEXT PRIMARY KEY,
+      total_cycles NUMERIC NOT NULL DEFAULT 0,
+      last_ts TIMESTAMPTZ NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `;
+  await query(sql);
+}
+
+export async function getDistinctBatteryIds(): Promise<string[]> {
+  const sql = `SELECT DISTINCT battery_id FROM ${TABLE_NAME} WHERE battery_id IS NOT NULL;`;
+  const rows = await query<{ battery_id: string }>(sql);
+  return rows.map(r => r.battery_id);
+}
+
+export async function getMaxTimestamp(batteryId: string): Promise<Date | null> {
+  const sql = `SELECT MAX(ts) AS max_ts FROM ${TABLE_NAME} WHERE battery_id = $1;`;
+  const rows = await query<{ max_ts: Date | null }>(sql, [batteryId]);
+  return rows[0]?.max_ts ?? null;
+}
+
+export async function getCycleTally(): Promise<CycleTallyRow[]> {
+  await ensureCycleTallyTable();
+  const rows = await query<CycleTallyRow>(`SELECT battery_id, total_cycles::float AS total_cycles, last_ts, updated_at FROM cycle_tally ORDER BY battery_id;`);
+  return rows;
+}
+
+export async function initCycleTallyFromCsv(csvPath: string): Promise<number> {
+  await ensureCycleTallyTable();
+  // Read CSV and upsert totals
+  // Minimal parser: assumes header: battery_id,cycles_last_24h,cycles_last_7d,cycles_last_30d,total_cycles
+  const fs = await import("fs");
+  const path = await import("path");
+  const fullPath = path.join(process.cwd(), csvPath);
+  const content = fs.readFileSync(fullPath, "utf8");
+  const lines = content.trim().split(/\r?\n/);
+  const header = lines.shift();
+  if (!header || !header.includes("battery_id") || !header.includes("total_cycles")) {
+    throw new Error("Invalid CSV format for cycle tally initialization");
+  }
+  let count = 0;
+  for (const line of lines) {
+    const [battery_id, _c24, _c7, _c30, total_cycles_str] = line.split(",");
+    const total_cycles = parseFloat(total_cycles_str);
+    if (!battery_id || Number.isNaN(total_cycles)) continue;
+    await query(
+      `INSERT INTO cycle_tally (battery_id, total_cycles, last_ts, updated_at)
+       VALUES ($1, $2, NULL, NOW())
+       ON CONFLICT (battery_id)
+       DO UPDATE SET total_cycles = EXCLUDED.total_cycles, updated_at = NOW();`,
+      [battery_id, total_cycles]
+    );
+    count++;
+  }
+  return count;
+}
+
+export async function getCyclesSince(batteryId: string, since: Date): Promise<number> {
+  // Fetch SOC series after 'since' and compute EFC increment as sum of positive drops / 100
+  const sql = `
+    SELECT ts, battery_soc_pct
+    FROM ${TABLE_NAME}
+    WHERE battery_id = $1 AND ts > $2
+    ORDER BY ts ASC;
+  `;
+  const rows = await query<{ ts: Date; battery_soc_pct: number }>(sql, [batteryId, since]);
+  if (rows.length < 2) return 0;
+  let prev: number | null = null;
+  let dropSum = 0;
+  for (const r of rows) {
+    const soc = Number(r.battery_soc_pct) || 0;
+    if (prev !== null) {
+      const drop = Math.max(prev - soc, 0);
+      dropSum += drop;
+    }
+    prev = soc;
+  }
+  return dropSum / 100;
+}
+
+export async function incrementCycleTally(): Promise<{ updated: number }> {
+  await ensureCycleTallyTable();
+  const batteryIds = await getDistinctBatteryIds();
+  let updated = 0;
+  for (const batteryId of batteryIds) {
+    // Get current tally row
+    const existing = await query<CycleTallyRow>(
+      `SELECT battery_id, total_cycles::float AS total_cycles, last_ts, updated_at FROM cycle_tally WHERE battery_id = $1;`,
+      [batteryId]
+    );
+    const maxTs = await getMaxTimestamp(batteryId);
+    if (!maxTs) continue; // No telemetry
+
+    if (existing.length === 0) {
+      // Initialize row with zero and set last_ts to current max to start incremental counting
+      await query(
+        `INSERT INTO cycle_tally (battery_id, total_cycles, last_ts, updated_at) VALUES ($1, 0, $2, NOW());`,
+        [batteryId, maxTs]
+      );
+      updated++;
+      continue;
+    }
+
+    const row = existing[0];
+    const lastTsStr = row.last_ts;
+    const lastTs = lastTsStr ? new Date(lastTsStr) : null;
+    if (!lastTs) {
+      // No last_ts: just set it to current max to avoid recounting old data
+      await query(`UPDATE cycle_tally SET last_ts = $2, updated_at = NOW() WHERE battery_id = $1;`, [batteryId, maxTs]);
+      updated++;
+      continue;
+    }
+
+    if (maxTs <= lastTs) {
+      // Nothing new
+      continue;
+    }
+
+    const inc = await getCyclesSince(batteryId, lastTs);
+    if (inc > 0) {
+      await query(
+        `UPDATE cycle_tally SET total_cycles = total_cycles + $2, last_ts = $3, updated_at = NOW() WHERE battery_id = $1;`,
+        [batteryId, inc, maxTs]
+      );
+      updated++;
+    } else {
+      // Still update last_ts to max to avoid recounting if no drops occurred
+      await query(`UPDATE cycle_tally SET last_ts = $2, updated_at = NOW() WHERE battery_id = $1;`, [batteryId, maxTs]);
+    }
+  }
+  return { updated };
 }
 

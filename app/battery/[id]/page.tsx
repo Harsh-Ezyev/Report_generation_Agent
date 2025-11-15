@@ -53,6 +53,17 @@ export default function BatteryDetailPage() {
     { refreshInterval: 300000 }
   );
 
+  const { data: cycles, error: cyclesError, isLoading: cyclesLoading } = useSWR<{
+    cycles_last_24h: number;
+    cycles_last_7d: number;
+    cycles_last_30d: number;
+    total_cycles: number;
+  }>(
+    batteryId ? `/api/battery/${encodeURIComponent(batteryId)}/cycles` : null,
+    fetcher,
+    { refreshInterval: 300000 }
+  );
+
   const metrics: BatteryMetrics = aggregated && aggregated.length > 0
     ? {
         soc_delta: aggregated[aggregated.length - 1].soc - aggregated[0].soc,
@@ -98,7 +109,30 @@ export default function BatteryDetailPage() {
           Battery: {batteryId}
         </h1>
 
-        <div className="grid gap-4 md:grid-cols-3 mb-8">
+        {/* Show only Total Cycles at top */}
+        <div className="grid gap-4 md:grid-cols-1 mb-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>Total Cycles</CardTitle>
+              <CardDescription>Persisted cumulative cycles</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {cyclesLoading ? (
+                <Skeleton className="h-8 w-32" />
+              ) : cyclesError ? (
+                <p className="text-red-600 dark:text-red-500">Failed to load cycles</p>
+              ) : (
+                <p className="text-3xl font-bold text-foreground">
+                  {(cycles?.total_cycles ?? 0).toFixed(2)}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Section below for other metrics */}
+        <h2 className="text-2xl font-semibold text-foreground mb-4">More Details</h2>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-8">
           <Card>
             <CardHeader>
               <CardTitle>SOC Delta</CardTitle>
@@ -133,14 +167,14 @@ export default function BatteryDetailPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Anomaly Count</CardTitle>
-              <CardDescription>Detected anomalies</CardDescription>
+              <CardTitle>Anomalies</CardTitle>
+              <CardDescription>Last 24h counts</CardDescription>
             </CardHeader>
             <CardContent>
               {anomaliesLoading ? (
                 <Skeleton className="h-8 w-24" />
               ) : (
-                <p className="text-3xl font-bold text-red-600 dark:text-red-500">
+                <p className="text-3xl font-bold text-foreground">
                   {metrics.anomaly_count}
                 </p>
               )}
@@ -148,6 +182,7 @@ export default function BatteryDetailPage() {
           </Card>
         </div>
 
+        {/* Keep charts and tables below */}
         <div className="grid gap-4 md:grid-cols-2 mb-8">
           <Card>
             <CardHeader>
