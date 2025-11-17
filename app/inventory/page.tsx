@@ -21,7 +21,7 @@ const fetcher = async (url: string) => {
 
 type BatteryStatus = "red" | "orange" | "green";
 
-function getBatteryStatus(battery: BatteryListItem): {
+function getBatteryStatus(battery: DeviceListItem): {
   status: BatteryStatus;
   color: string;
   bgColor: string;
