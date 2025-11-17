@@ -15,13 +15,24 @@ async function calculateCycles(deviceId: string, hours: number): Promise<number>
     ORDER BY ts ASC;
   `;
 
-  const rows = await query<{
+  let rows = await query<{
     ts: Date;
     battery_soc_pct: number;
   }>(sql, [deviceId]);
 
   if (rows.length < 2) {
-    return 0;
+    const sqlBattery = `
+      SELECT ts, battery_soc_pct
+      FROM ${TABLE_NAME}
+      WHERE battery_id = $1
+        AND ts >= NOW() - INTERVAL '${safeHours} hours'
+        AND battery_soc_pct IS NOT NULL
+      ORDER BY ts ASC;
+    `;
+    rows = await query<{ ts: Date; battery_soc_pct: number }>(sqlBattery, [deviceId]);
+    if (rows.length < 2) {
+      return 0;
+    }
   }
 
   let totalDrop = 0;
@@ -44,13 +55,23 @@ async function calculateTotalCycles(deviceId: string): Promise<number> {
     ORDER BY ts ASC;
   `;
 
-  const rows = await query<{
+  let rows = await query<{
     ts: Date;
     battery_soc_pct: number;
   }>(sql, [deviceId]);
 
   if (rows.length < 2) {
-    return 0;
+    const sqlBattery = `
+      SELECT ts, battery_soc_pct
+      FROM ${TABLE_NAME}
+      WHERE battery_id = $1
+        AND battery_soc_pct IS NOT NULL
+      ORDER BY ts ASC;
+    `;
+    rows = await query<{ ts: Date; battery_soc_pct: number }>(sqlBattery, [deviceId]);
+    if (rows.length < 2) {
+      return 0;
+    }
   }
 
   let totalDrop = 0;

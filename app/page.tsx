@@ -325,7 +325,6 @@ export default function Home() {
                     <TableHead>Device ID</TableHead>
                     <TableHead>SOC Delta (%)</TableHead>
                     <TableHead>ODO Delta (km)</TableHead>
-                    <TableHead>Total Cycles</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -338,7 +337,6 @@ export default function Home() {
                             <TableCell className="font-medium">{battery.device_id}</TableCell>
                             <TableCell>{battery.soc_delta.toFixed(2)}</TableCell>
                             <TableCell>{battery.odo_delta.toFixed(2)}</TableCell>
-                            <TableCell className="font-semibold">{battery.total_cycles.toFixed(2)}</TableCell>
                             <TableCell>
                               <span className={status.color}>{status.label}</span>
                             </TableCell>
@@ -375,7 +373,6 @@ export default function Home() {
                     <TableHead>Device ID</TableHead>
                     <TableHead>SOC Delta (%)</TableHead>
                     <TableHead>ODO Delta (km)</TableHead>
-                    <TableHead>Total Cycles</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -388,7 +385,6 @@ export default function Home() {
                             <TableCell className="font-medium">{battery.device_id}</TableCell>
                             <TableCell>{battery.soc_delta.toFixed(2)}</TableCell>
                             <TableCell>{battery.odo_delta.toFixed(2)}</TableCell>
-                            <TableCell className="font-semibold">{battery.total_cycles.toFixed(2)}</TableCell>
                             <TableCell>
                               <span className={status.color}>{status.label}</span>
                             </TableCell>
@@ -425,7 +421,6 @@ export default function Home() {
                     <TableHead>Device ID</TableHead>
                     <TableHead>SOC Delta (%)</TableHead>
                     <TableHead>ODO Delta (km)</TableHead>
-                    <TableHead>Total Cycles</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -438,7 +433,6 @@ export default function Home() {
                             <TableCell className="font-medium">{battery.device_id}</TableCell>
                             <TableCell>{battery.soc_delta.toFixed(2)}</TableCell>
                             <TableCell>{battery.odo_delta.toFixed(2)}</TableCell>
-                            <TableCell className="font-semibold">{battery.total_cycles.toFixed(2)}</TableCell>
                             <TableCell>
                               <span className={status.color}>{status.label}</span>
                             </TableCell>

@@ -64,7 +64,7 @@ export interface AnomalyPoint {
 }
 
 export async function get2hAggregatedByDevice(deviceId: string): Promise<AggregatedDataPoint[]> {
-  const sql = `
+  const sqlDevice = `
     SELECT
       time_bucket('2 hours', ts) AS ts,
       MAX(odo_meter_km) AS odo,
@@ -76,11 +76,26 @@ export async function get2hAggregatedByDevice(deviceId: string): Promise<Aggrega
     ORDER BY 1;
   `;
 
-  const rows = await query<{
+  let rows = await query<{
     ts: Date;
     odo: number;
     soc: number;
-  }>(sql, [deviceId]);
+  }>(sqlDevice, [deviceId]);
+
+  if (rows.length === 0) {
+    const sqlBattery = `
+      SELECT
+        time_bucket('2 hours', ts) AS ts,
+        MAX(odo_meter_km) AS odo,
+        AVG(battery_soc_pct) AS soc
+      FROM ${TABLE_NAME}
+      WHERE battery_id = $1
+        AND ts >= NOW() - INTERVAL '24 hours'
+      GROUP BY 1
+      ORDER BY 1;
+    `;
+    rows = await query<{ ts: Date; odo: number; soc: number }>(sqlBattery, [deviceId]);
+  }
 
   return rows.map((row) => ({
     ts: formatInTimeZone(row.ts, "Asia/Kolkata", "yyyy-MM-dd'T'HH:mm:ssXXX"),
@@ -286,41 +301,41 @@ export async function getDeviceList(): Promise<DeviceListItem[]> {
 
   const getCyclesSummary = async (hours: number): Promise<Map<string, number>> => {
     const sql = `
-      SELECT device_id,
+      SELECT device_key,
              SUM(GREATEST(0, COALESCE(prev_soc - battery_soc_pct, 0))) / 100.0 AS cycles
       FROM (
-        SELECT device_id,
+        SELECT COALESCE(device_id, battery_id) AS device_key,
                ts,
                battery_soc_pct,
-               LAG(battery_soc_pct) OVER (PARTITION BY device_id ORDER BY ts) AS prev_soc
+               LAG(battery_soc_pct) OVER (PARTITION BY COALESCE(device_id, battery_id) ORDER BY ts) AS prev_soc
         FROM ${TABLE_NAME}
         WHERE battery_soc_pct IS NOT NULL
-          AND device_id IS NOT NULL
+          AND (device_id IS NOT NULL OR battery_id IS NOT NULL)
           AND ts >= NOW() - INTERVAL '${hours} hours'
       ) s
-      GROUP BY device_id;
+      GROUP BY device_key;
     `;
-    const res = await query<{ device_id: string; cycles: number }>(sql);
-    return new Map(res.map((r) => [r.device_id, Number((r.cycles || 0).toFixed(3))]));
+    const res = await query<{ device_key: string; cycles: number }>(sql);
+    return new Map(res.map((r) => [r.device_key, Number((r.cycles || 0).toFixed(3))]));
   };
 
   const getTotalCyclesSummary = async (): Promise<Map<string, number>> => {
     const sql = `
-      SELECT device_id,
+      SELECT device_key,
              SUM(GREATEST(0, COALESCE(prev_soc - battery_soc_pct, 0))) / 100.0 AS cycles
       FROM (
-        SELECT device_id,
+        SELECT COALESCE(device_id, battery_id) AS device_key,
                ts,
                battery_soc_pct,
-               LAG(battery_soc_pct) OVER (PARTITION BY device_id ORDER BY ts) AS prev_soc
+               LAG(battery_soc_pct) OVER (PARTITION BY COALESCE(device_id, battery_id) ORDER BY ts) AS prev_soc
         FROM ${TABLE_NAME}
         WHERE battery_soc_pct IS NOT NULL
-          AND device_id IS NOT NULL
+          AND (device_id IS NOT NULL OR battery_id IS NOT NULL)
       ) s
-      GROUP BY device_id;
+      GROUP BY device_key;
     `;
-    const res = await query<{ device_id: string; cycles: number }>(sql);
-    return new Map(res.map((r) => [r.device_id, Number((r.cycles || 0).toFixed(3))]));
+    const res = await query<{ device_key: string; cycles: number }>(sql);
+    return new Map(res.map((r) => [r.device_key, Number((r.cycles || 0).toFixed(3))]));
   };
 
   let c24 = new Map<string, number>();
@@ -366,7 +381,7 @@ export async function getDeviceAggregated(
 export async function getDeviceAnomalies(
   deviceId: string
 ): Promise<AnomalyPoint[]> {
-  const sql = `
+  const sqlDevice = `
     SELECT
       time_bucket('2 hours', ts) AS ts,
       AVG(battery_soc_pct) AS soc
@@ -377,10 +392,24 @@ export async function getDeviceAnomalies(
     ORDER BY 1;
   `;
 
-  const rows = await query<{
+  let rows = await query<{
     ts: Date;
     soc: number;
-  }>(sql, [deviceId]);
+  }>(sqlDevice, [deviceId]);
+
+  if (rows.length < 2) {
+    const sqlBattery = `
+      SELECT
+        time_bucket('2 hours', ts) AS ts,
+        AVG(battery_soc_pct) AS soc
+      FROM ${TABLE_NAME}
+      WHERE battery_id = $1
+        AND ts >= NOW() - INTERVAL '24 hours'
+      GROUP BY 1
+      ORDER BY 1;
+    `;
+    rows = await query<{ ts: Date; soc: number }>(sqlBattery, [deviceId]);
+  }
 
   if (rows.length < 2) {
     return [];
