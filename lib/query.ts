@@ -91,27 +91,25 @@ export async function get2hAggregatedByDevice(deviceId: string): Promise<Aggrega
 
 export async function getFirstLast(): Promise<FirstLastRow[]> {
   const sqlFirst = `
-    SELECT DISTINCT ON (device_id)
-      device_id,
+    SELECT DISTINCT ON (COALESCE(device_id, battery_id))
+      COALESCE(device_id, battery_id) AS device_id,
       ts,
       battery_soc_pct,
       odo_meter_km
     FROM ${TABLE_NAME}
     WHERE ts >= NOW() - INTERVAL '24 hours'
-    AND device_id IS NOT NULL
-    ORDER BY device_id, ts ASC;
+    ORDER BY COALESCE(device_id, battery_id), ts ASC;
   `;
 
   const sqlLast = `
-    SELECT DISTINCT ON (device_id)
-      device_id,
+    SELECT DISTINCT ON (COALESCE(device_id, battery_id))
+      COALESCE(device_id, battery_id) AS device_id,
       ts,
       battery_soc_pct,
       odo_meter_km
     FROM ${TABLE_NAME}
     WHERE ts >= NOW() - INTERVAL '24 hours'
-    AND device_id IS NOT NULL
-    ORDER BY device_id, ts DESC;
+    ORDER BY COALESCE(device_id, battery_id), ts DESC;
   `;
 
   const firstRows = await query<{
@@ -136,9 +134,7 @@ export async function getFirstLast(): Promise<FirstLastRow[]> {
   };
 
   const firstMap = new Map<string, FirstLastInfo>(
-    firstRows
-      .filter((row) => !!row.device_id)
-      .map((row) => [
+    firstRows.map((row) => [
       row.device_id as string,
       {
         ts: formatInTimeZone(row.ts, "Asia/Kolkata", "yyyy-MM-dd'T'HH:mm:ssXXX"),
@@ -150,9 +146,7 @@ export async function getFirstLast(): Promise<FirstLastRow[]> {
   );
 
   const lastMap = new Map<string, FirstLastInfo>(
-    lastRows
-      .filter((row) => !!row.device_id)
-      .map((row) => [
+    lastRows.map((row) => [
       row.device_id as string,
       {
         ts: formatInTimeZone(row.ts, "Asia/Kolkata", "yyyy-MM-dd'T'HH:mm:ssXXX"),
@@ -291,13 +285,6 @@ export async function getDeviceList(): Promise<DeviceListItem[]> {
   const deviceList: DeviceListItem[] = [];
 
   for (const row of rows) {
-    const [cycles24h, cycles7d, cycles30d, totalCycles] = await Promise.all([
-      calculateCycles(row.device_id, 24),
-      calculateCycles(row.device_id, 168),
-      calculateCycles(row.device_id, 720),
-      calculateTotalCycles(row.device_id),
-    ]);
-
     deviceList.push({
       device_id: row.device_id || "",
       soc_delta: Number(
@@ -306,10 +293,10 @@ export async function getDeviceList(): Promise<DeviceListItem[]> {
       odo_delta: Number(
         (row.odo_meter_km_last - row.odo_meter_km_first).toFixed(2)
       ),
-      cycles_last_24h: cycles24h,
-      cycles_last_7d: cycles7d,
-      cycles_last_30d: cycles30d,
-      total_cycles: totalCycles,
+      cycles_last_24h: 0,
+      cycles_last_7d: 0,
+      cycles_last_30d: 0,
+      total_cycles: 0,
     });
   }
 
