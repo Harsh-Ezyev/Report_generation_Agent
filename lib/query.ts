@@ -280,9 +280,63 @@ async function calculateTotalCycles(deviceId: string): Promise<number> {
 }
 
 export async function getDeviceList(): Promise<DeviceListItem[]> {
-  const rows = await getFirstLast();
+  const rows = (await getFirstLast()).filter((r) => r.device_id && r.device_id.trim().length > 0);
 
   const deviceList: DeviceListItem[] = [];
+
+  const getCyclesSummary = async (hours: number): Promise<Map<string, number>> => {
+    const sql = `
+      SELECT device_id,
+             SUM(GREATEST(0, COALESCE(prev_soc - battery_soc_pct, 0))) / 100.0 AS cycles
+      FROM (
+        SELECT device_id,
+               ts,
+               battery_soc_pct,
+               LAG(battery_soc_pct) OVER (PARTITION BY device_id ORDER BY ts) AS prev_soc
+        FROM ${TABLE_NAME}
+        WHERE battery_soc_pct IS NOT NULL
+          AND device_id IS NOT NULL
+          AND ts >= NOW() - INTERVAL '${hours} hours'
+      ) s
+      GROUP BY device_id;
+    `;
+    const res = await query<{ device_id: string; cycles: number }>(sql);
+    return new Map(res.map((r) => [r.device_id, Number((r.cycles || 0).toFixed(3))]));
+  };
+
+  const getTotalCyclesSummary = async (): Promise<Map<string, number>> => {
+    const sql = `
+      SELECT device_id,
+             SUM(GREATEST(0, COALESCE(prev_soc - battery_soc_pct, 0))) / 100.0 AS cycles
+      FROM (
+        SELECT device_id,
+               ts,
+               battery_soc_pct,
+               LAG(battery_soc_pct) OVER (PARTITION BY device_id ORDER BY ts) AS prev_soc
+        FROM ${TABLE_NAME}
+        WHERE battery_soc_pct IS NOT NULL
+          AND device_id IS NOT NULL
+      ) s
+      GROUP BY device_id;
+    `;
+    const res = await query<{ device_id: string; cycles: number }>(sql);
+    return new Map(res.map((r) => [r.device_id, Number((r.cycles || 0).toFixed(3))]));
+  };
+
+  let c24 = new Map<string, number>();
+  let c7d = new Map<string, number>();
+  let c30d = new Map<string, number>();
+  let cTotal = new Map<string, number>();
+  try {
+    [c24, c7d, c30d, cTotal] = await Promise.all([
+      getCyclesSummary(24),
+      getCyclesSummary(168),
+      getCyclesSummary(720),
+      getTotalCyclesSummary(),
+    ]);
+  } catch (e) {
+    console.error("Cycles summary error:", e);
+  }
 
   for (const row of rows) {
     deviceList.push({
@@ -293,10 +347,10 @@ export async function getDeviceList(): Promise<DeviceListItem[]> {
       odo_delta: Number(
         (row.odo_meter_km_last - row.odo_meter_km_first).toFixed(2)
       ),
-      cycles_last_24h: 0,
-      cycles_last_7d: 0,
-      cycles_last_30d: 0,
-      total_cycles: 0,
+      cycles_last_24h: c24.get(row.device_id) ?? 0,
+      cycles_last_7d: c7d.get(row.device_id) ?? 0,
+      cycles_last_30d: c30d.get(row.device_id) ?? 0,
+      total_cycles: cTotal.get(row.device_id) ?? 0,
     });
   }
 
@@ -367,5 +421,63 @@ export async function getDeviceAnomalies(
   }
 
   return anomalies;
+}
+export interface BatteryListItem {
+  battery_id: string;
+  device_id: string;
+  soc_delta: number;
+  odo_delta: number;
+  cycles_last_24h: number;
+  cycles_last_7d: number;
+  cycles_last_30d: number;
+  total_cycles: number;
+}
+
+export async function getBatteryList(): Promise<BatteryListItem[]> {
+  return [];
+}
+
+export async function getBatteryAggregated(
+  batteryId: string
+): Promise<AggregatedDataPoint[]> {
+  return [];
+}
+
+export async function getBatteryAnomalies(
+  batteryId: string
+): Promise<AnomalyPoint[]> {
+  return [];
+}
+
+export async function ensureCycleTallyTable(): Promise<void> {
+  await query(
+    `CREATE TABLE IF NOT EXISTS cycle_tally (
+       battery_id text PRIMARY KEY,
+       total_cycles numeric DEFAULT 0,
+       last_ts timestamptz,
+       updated_at timestamptz DEFAULT NOW()
+     );`
+  );
+}
+
+export async function getCycleTally(): Promise<{ battery_id: string; total_cycles: number; last_ts: Date | null; updated_at: Date | null }[]> {
+  await ensureCycleTallyTable();
+  const rows = await query<{
+    battery_id: string;
+    total_cycles: number;
+    last_ts: Date | null;
+    updated_at: Date | null;
+  }>(`SELECT battery_id, total_cycles::float AS total_cycles, last_ts, updated_at FROM cycle_tally ORDER BY battery_id ASC;`);
+  return rows;
+}
+
+export async function incrementCycleTally(): Promise<{ updated: number }> {
+  await ensureCycleTallyTable();
+  return { updated: 0 };
+}
+
+export async function initCycleTallyFromCsv(_csvPath?: string): Promise<{ updated: number }> {
+  await ensureCycleTallyTable();
+  return { updated: 0 };
 }
 
