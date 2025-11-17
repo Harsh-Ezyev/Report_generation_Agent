@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeToggle } from "@/components/theme-toggle";
 import Link from "next/link";
-import { BatteryListItem } from "@/lib/query";
+import { DeviceListItem } from "@/lib/query";
 import {
   PieChart,
   Pie,
@@ -18,10 +18,10 @@ import {
 } from "recharts";
 
 interface FleetSummary {
-  total_batteries: number;
+  total_devices: number;
   avg_soc_delta: number;
   worst_soc_delta: number;
-  no_odo_batteries: string[];
+  no_odo_devices: string[];
 }
 
 const fetcher = async (url: string) => {
@@ -35,7 +35,7 @@ const fetcher = async (url: string) => {
 
 type BatteryStatus = "red" | "orange" | "green";
 
-function getBatteryStatus(battery: BatteryListItem, noOdoBatteries: string[]): {
+function getBatteryStatus(battery: DeviceListItem): {
   status: BatteryStatus;
   color: string;
   bgColor: string;
@@ -77,8 +77,8 @@ export default function Home() {
     { refreshInterval: 300000 }
   );
 
-  const { data: batteries, error: batteriesError, isLoading: batteriesLoading } = useSWR<BatteryListItem[]>(
-    "/api/batteries",
+  const { data: batteries, error: batteriesError, isLoading: batteriesLoading } = useSWR<DeviceListItem[]>(
+    "/api/devices",
     fetcher,
     { refreshInterval: 300000 }
   );
@@ -89,12 +89,12 @@ export default function Home() {
       return { red: [], orange: [], green: [] };
     }
 
-    const red: BatteryListItem[] = [];
-    const orange: BatteryListItem[] = [];
-    const green: BatteryListItem[] = [];
+    const red: DeviceListItem[] = [];
+    const orange: DeviceListItem[] = [];
+    const green: DeviceListItem[] = [];
 
     batteries.forEach((battery) => {
-      const status = getBatteryStatus(battery, summary?.no_odo_batteries || []);
+      const status = getBatteryStatus(battery);
       if (status.status === "red") {
         red.push(battery);
       } else if (status.status === "orange") {
@@ -105,7 +105,7 @@ export default function Home() {
     });
 
     return { red, orange, green };
-  }, [batteries, summary?.no_odo_batteries]);
+  }, [batteries]);
 
   const pieData = React.useMemo(() => {
     const workingCount = groupedBatteries.orange.length + groupedBatteries.green.length;
@@ -140,8 +140,16 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background p-8">
       <ThemeToggle />
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-bold text-foreground mb-8">Fleet Overview</h1>
+f      <div className="max-w-7xl mx-auto">
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-4xl font-bold text-foreground">Fleet Overview</h1>
+          <Link
+            href="/inventory"
+            className="text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            Inventory Management
+          </Link>
+        </div>
 
         {summaryLoading ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
@@ -153,11 +161,11 @@ export default function Home() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
             <Card>
               <CardHeader>
-                <CardTitle>Total Batteries</CardTitle>
+                <CardTitle>Total Devices</CardTitle>
                 <CardDescription>Active in last 24h</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold text-foreground">{summary?.total_batteries || 0}</p>
+                <p className="text-3xl font-bold text-foreground">{summary?.total_devices || 0}</p>
               </CardContent>
             </Card>
 
@@ -188,11 +196,11 @@ export default function Home() {
             <Card>
               <CardHeader>
                 <CardTitle>No ODO Movement</CardTitle>
-                <CardDescription>Batteries with zero change</CardDescription>
+                <CardDescription>Devices with zero change</CardDescription>
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-bold text-red-600 dark:text-red-500">
-                  {summary?.no_odo_batteries?.length || 0}
+                  {summary?.no_odo_devices?.length || 0}
                 </p>
               </CardContent>
             </Card>
@@ -288,8 +296,8 @@ export default function Home() {
         {batteriesLoading ? (
           <Card>
             <CardHeader>
-              <CardTitle>Battery List</CardTitle>
-              <CardDescription>Loading batteries...</CardDescription>
+              <CardTitle>Device List</CardTitle>
+              <CardDescription>Loading devices...</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
@@ -308,28 +316,26 @@ export default function Home() {
                   <CardTitle className="text-red-600 dark:text-red-500">
                     🔴 No ODO Movement ({groupedBatteries.red.length})
                   </CardTitle>
-                  <CardDescription>Batteries with zero odometer change</CardDescription>
+                  <CardDescription>Devices with zero odometer change</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Table>
                     <TableHeader>
                   <TableRow>
-                    <TableHead>Battery ID</TableHead>
                     <TableHead>Device ID</TableHead>
-                        <TableHead>SOC Delta (%)</TableHead>
-                        <TableHead>ODO Delta (km)</TableHead>
-                        <TableHead>Total Cycles</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
+                    <TableHead>SOC Delta (%)</TableHead>
+                    <TableHead>ODO Delta (km)</TableHead>
+                    <TableHead>Total Cycles</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
                     </TableHeader>
                     <TableBody>
                       {groupedBatteries.red.map((battery) => {
-                        const status = getBatteryStatus(battery, summary?.no_odo_batteries || []);
+                        const status = getBatteryStatus(battery);
                         return (
-                          <TableRow key={battery.battery_id} className={status.bgColor}>
-                            <TableCell className="font-medium">{battery.battery_id}</TableCell>
-                            <TableCell>{battery.device_id}</TableCell>
+                          <TableRow key={battery.device_id} className={status.bgColor}>
+                            <TableCell className="font-medium">{battery.device_id}</TableCell>
                             <TableCell>{battery.soc_delta.toFixed(2)}</TableCell>
                             <TableCell>{battery.odo_delta.toFixed(2)}</TableCell>
                             <TableCell className="font-semibold">{battery.total_cycles.toFixed(2)}</TableCell>
@@ -338,7 +344,7 @@ export default function Home() {
                             </TableCell>
                             <TableCell>
                               <Link
-                                href={`/battery/${encodeURIComponent(battery.battery_id)}`}
+                                href={`/device/${encodeURIComponent(battery.device_id)}`}
                                 className="text-blue-600 dark:text-blue-400 hover:underline"
                               >
                                 View Details
@@ -360,28 +366,26 @@ export default function Home() {
                   <CardTitle className="text-orange-600 dark:text-orange-500">
                     🟠 Low ODO Movement ({groupedBatteries.orange.length})
                   </CardTitle>
-                  <CardDescription>Batteries with minimal odometer change (&lt; 0.1 km)</CardDescription>
+                  <CardDescription>Devices with minimal odometer change (&lt; 0.1 km)</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Table>
                     <TableHeader>
                   <TableRow>
-                    <TableHead>Battery ID</TableHead>
                     <TableHead>Device ID</TableHead>
-                        <TableHead>SOC Delta (%)</TableHead>
-                        <TableHead>ODO Delta (km)</TableHead>
-                        <TableHead>Total Cycles</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
+                    <TableHead>SOC Delta (%)</TableHead>
+                    <TableHead>ODO Delta (km)</TableHead>
+                    <TableHead>Total Cycles</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
                     </TableHeader>
                     <TableBody>
                       {groupedBatteries.orange.map((battery) => {
-                        const status = getBatteryStatus(battery, summary?.no_odo_batteries || []);
+                        const status = getBatteryStatus(battery);
                         return (
-                          <TableRow key={battery.battery_id} className={status.bgColor}>
-                            <TableCell className="font-medium">{battery.battery_id}</TableCell>
-                            <TableCell>{battery.device_id}</TableCell>
+                          <TableRow key={battery.device_id} className={status.bgColor}>
+                            <TableCell className="font-medium">{battery.device_id}</TableCell>
                             <TableCell>{battery.soc_delta.toFixed(2)}</TableCell>
                             <TableCell>{battery.odo_delta.toFixed(2)}</TableCell>
                             <TableCell className="font-semibold">{battery.total_cycles.toFixed(2)}</TableCell>
@@ -390,7 +394,7 @@ export default function Home() {
                             </TableCell>
                             <TableCell>
                               <Link
-                                href={`/battery/${encodeURIComponent(battery.battery_id)}`}
+                                href={`/device/${encodeURIComponent(battery.device_id)}`}
                                 className="text-blue-600 dark:text-blue-400 hover:underline"
                               >
                                 View Details
@@ -410,30 +414,28 @@ export default function Home() {
               <Card className="border-green-200 dark:border-green-500/20">
                 <CardHeader>
                   <CardTitle className="text-green-600 dark:text-green-500">
-                    🟢 Normal Batteries ({groupedBatteries.green.length})
+                    🟢 Normal Devices ({groupedBatteries.green.length})
                   </CardTitle>
-                  <CardDescription>Batteries with normal odometer movement</CardDescription>
+                  <CardDescription>Devices with normal odometer movement</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Table>
                     <TableHeader>
                   <TableRow>
-                    <TableHead>Battery ID</TableHead>
                     <TableHead>Device ID</TableHead>
-                        <TableHead>SOC Delta (%)</TableHead>
-                        <TableHead>ODO Delta (km)</TableHead>
-                        <TableHead>Total Cycles</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
+                    <TableHead>SOC Delta (%)</TableHead>
+                    <TableHead>ODO Delta (km)</TableHead>
+                    <TableHead>Total Cycles</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
                     </TableHeader>
                     <TableBody>
                       {groupedBatteries.green.map((battery) => {
-                        const status = getBatteryStatus(battery, summary?.no_odo_batteries || []);
+                        const status = getBatteryStatus(battery);
                         return (
-                          <TableRow key={battery.battery_id} className={status.bgColor}>
-                            <TableCell className="font-medium">{battery.battery_id}</TableCell>
-                            <TableCell>{battery.device_id}</TableCell>
+                          <TableRow key={battery.device_id} className={status.bgColor}>
+                            <TableCell className="font-medium">{battery.device_id}</TableCell>
                             <TableCell>{battery.soc_delta.toFixed(2)}</TableCell>
                             <TableCell>{battery.odo_delta.toFixed(2)}</TableCell>
                             <TableCell className="font-semibold">{battery.total_cycles.toFixed(2)}</TableCell>
@@ -442,7 +444,7 @@ export default function Home() {
                             </TableCell>
                             <TableCell>
                               <Link
-                                href={`/battery/${encodeURIComponent(battery.battery_id)}`}
+                                href={`/device/${encodeURIComponent(battery.device_id)}`}
                                 className="text-blue-600 dark:text-blue-400 hover:underline"
                               >
                                 View Details
@@ -460,9 +462,7 @@ export default function Home() {
         ) : (
           <Card>
             <CardContent className="pt-6">
-              <p className="text-muted-foreground">
-                    No batteries found
-              </p>
+              <p className="text-muted-foreground">No devices found</p>
             </CardContent>
           </Card>
         )}
