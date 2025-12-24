@@ -25,13 +25,33 @@ npm install
 ```
 
 2. Create a `.env.local` file with your database credentials:
-```
-DB_HOST=your-db-host
-DB_NAME=your-db-name
-DB_USER=your-db-user
-DB_PASS=your-db-password
-TABLE_NAME=your-table-name
-```
+   - Copy `.env.example` to `.env.local`
+   - Fill in your actual database values
+
+   Required variables:
+   ```
+   DB_HOST=your-db-host          # e.g., localhost or your-db-host.com
+   DB_NAME=your-db-name          # Your PostgreSQL database name
+   DB_USER=your-db-user          # Database username
+   DB_PASS=your-db-password      # Database password
+   ```
+
+   Optional variables:
+   ```
+   DB_PORT=5432                  # Defaults to 5432 if not specified
+   TABLE_NAME=bms_data           # Defaults to "bms_data" if not specified
+                                  # Can be schema-qualified: "public.iotbms_telemetry"
+   ```
+
+   Example `.env.local`:
+   ```
+   DB_HOST=localhost
+   DB_PORT=5432
+   DB_NAME=battery_monitoring
+   DB_USER=postgres
+   DB_PASS=mypassword
+   TABLE_NAME=bms_data
+   ```
 
 3. Run the development server:
 ```bash
