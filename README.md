@@ -92,3 +92,12 @@ Anomalies are detected using a hybrid rule:
 - SWR for data fetching
 - PostgreSQL with TimescaleDB
 
+## Deployment
+
+<a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fyour-username%2Fyour-repo-name&env=DB_HOST,DB_NAME,DB_USER,DB_PASS,TABLE_NAME,NEXTAUTH_SECRET,NEXTAUTH_URL">
+  <img src="https://vercel.com/button" alt="Deploy with Vercel"/>
+</a>
+
+For detailed deployment instructions, including how to set up the database and environment variables, please refer to [VERCEL_DEPLOY.md](VERCEL_DEPLOY.md).
+
+

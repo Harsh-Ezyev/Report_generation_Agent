@@ -83,6 +83,8 @@ This guide will help you deploy the Battery Fleet Monitoring Dashboard to Vercel
      - `DB_USER` - Your database user
      - `DB_PASS` - Your database password
      - `TABLE_NAME` - Your table name (e.g., `iot.bms_telemetry`)
+     - `NEXTAUTH_SECRET` - A random string (min 32 chars)
+     - `NEXTAUTH_URL` - Your Vercel URL (e.g., `https://your-project.vercel.app`)
 
 5. **Deploy**:
    - Click "Deploy"
