@@ -5,13 +5,9 @@ import useSWR from "swr";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { LogoutButton } from "@/components/logout-button";
 import Link from "next/link";
 import { DeviceListItem } from "@/lib/query";
-import { useSession } from "next-auth/react";
-import { Badge } from "@/components/ui/badge";
 import {
   PieChart,
   Pie,
@@ -27,7 +23,6 @@ interface FleetSummary {
   worst_soc_delta: number;
   no_odo_devices: string[];
 }
-
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -76,11 +71,6 @@ function getBatteryStatus(battery: DeviceListItem): {
 }
 
 export default function Home() {
-  const { data: session } = useSession();
-  const userRole = (session?.user as any)?.role || "client";
-  const userName = session?.user?.name || "User";
-  const isSuperAdmin = userRole === "super_admin";
-
   const { data: summary, error: summaryError, isLoading: summaryLoading } = useSWR<FleetSummary>(
     "/api/fleet-summary",
     fetcher,
@@ -92,12 +82,6 @@ export default function Home() {
     fetcher,
     { refreshInterval: 300000 }
   );
-
-  // Pagination state for each section
-  const [redPage, setRedPage] = React.useState(1);
-  const [orangePage, setOrangePage] = React.useState(1);
-  const [greenPage, setGreenPage] = React.useState(1);
-  const itemsPerPage = 20;
 
   // Group batteries by status
   const groupedBatteries = React.useMemo(() => {
@@ -122,22 +106,6 @@ export default function Home() {
 
     return { red, orange, green };
   }, [batteries]);
-
-  // Paginate each section
-  const paginatedRed = React.useMemo(() => {
-    const start = (redPage - 1) * itemsPerPage;
-    return groupedBatteries.red.slice(start, start + itemsPerPage);
-  }, [groupedBatteries.red, redPage]);
-
-  const paginatedOrange = React.useMemo(() => {
-    const start = (orangePage - 1) * itemsPerPage;
-    return groupedBatteries.orange.slice(start, start + itemsPerPage);
-  }, [groupedBatteries.orange, orangePage]);
-
-  const paginatedGreen = React.useMemo(() => {
-    const start = (greenPage - 1) * itemsPerPage;
-    return groupedBatteries.green.slice(start, start + itemsPerPage);
-  }, [groupedBatteries.green, greenPage]);
 
   const pieData = React.useMemo(() => {
     const workingCount = groupedBatteries.orange.length + groupedBatteries.green.length;
@@ -174,24 +142,13 @@ export default function Home() {
       <ThemeToggle />
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-4xl font-bold text-foreground">Fleet Overview</h1>
-            <div className="flex items-center gap-2 mt-2">
-              <span className="text-sm text-muted-foreground">Logged in as:</span>
-              <Badge variant={isSuperAdmin ? "default" : "secondary"}>
-                {userName} {isSuperAdmin ? "(Super Admin)" : "(Client)"}
-              </Badge>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/inventory"
-              className="text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              Inventory Management
-            </Link>
-            <LogoutButton />
-          </div>
+          <h1 className="text-4xl font-bold text-foreground">Fleet Overview</h1>
+          <Link
+            href="/inventory"
+            className="text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            Inventory Management
+          </Link>
         </div>
 
         {summaryLoading ? (
@@ -373,7 +330,7 @@ export default function Home() {
                   </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {paginatedRed.map((battery) => {
+                      {groupedBatteries.red.map((battery) => {
                         const status = getBatteryStatus(battery);
                         return (
                           <TableRow key={battery.device_id} className={status.bgColor}>
@@ -396,50 +353,6 @@ export default function Home() {
                       })}
                     </TableBody>
                   </Table>
-                  {groupedBatteries.red.length > itemsPerPage && (
-                    <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                      <div className="text-sm text-muted-foreground">
-                        Showing {((redPage - 1) * itemsPerPage) + 1} to {Math.min(redPage * itemsPerPage, groupedBatteries.red.length)} of {groupedBatteries.red.length} items
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setRedPage(1)}
-                          disabled={redPage === 1}
-                        >
-                          First
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setRedPage(redPage - 1)}
-                          disabled={redPage === 1}
-                        >
-                          Previous
-                        </Button>
-                        <span className="text-sm px-2">
-                          Page {redPage} of {Math.ceil(groupedBatteries.red.length / itemsPerPage)}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setRedPage(redPage + 1)}
-                          disabled={redPage >= Math.ceil(groupedBatteries.red.length / itemsPerPage)}
-                        >
-                          Next
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setRedPage(Math.ceil(groupedBatteries.red.length / itemsPerPage))}
-                          disabled={redPage >= Math.ceil(groupedBatteries.red.length / itemsPerPage)}
-                        >
-                          Last
-                        </Button>
-                      </div>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             )}
@@ -465,7 +378,7 @@ export default function Home() {
                   </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {paginatedOrange.map((battery) => {
+                      {groupedBatteries.orange.map((battery) => {
                         const status = getBatteryStatus(battery);
                         return (
                           <TableRow key={battery.device_id} className={status.bgColor}>
@@ -488,50 +401,6 @@ export default function Home() {
                       })}
                     </TableBody>
                   </Table>
-                  {groupedBatteries.orange.length > itemsPerPage && (
-                    <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                      <div className="text-sm text-muted-foreground">
-                        Showing {((orangePage - 1) * itemsPerPage) + 1} to {Math.min(orangePage * itemsPerPage, groupedBatteries.orange.length)} of {groupedBatteries.orange.length} items
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setOrangePage(1)}
-                          disabled={orangePage === 1}
-                        >
-                          First
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setOrangePage(orangePage - 1)}
-                          disabled={orangePage === 1}
-                        >
-                          Previous
-                        </Button>
-                        <span className="text-sm px-2">
-                          Page {orangePage} of {Math.ceil(groupedBatteries.orange.length / itemsPerPage)}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setOrangePage(orangePage + 1)}
-                          disabled={orangePage >= Math.ceil(groupedBatteries.orange.length / itemsPerPage)}
-                        >
-                          Next
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setOrangePage(Math.ceil(groupedBatteries.orange.length / itemsPerPage))}
-                          disabled={orangePage >= Math.ceil(groupedBatteries.orange.length / itemsPerPage)}
-                        >
-                          Last
-                        </Button>
-                      </div>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             )}
@@ -557,7 +426,7 @@ export default function Home() {
                   </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {paginatedGreen.map((battery) => {
+                      {groupedBatteries.green.map((battery) => {
                         const status = getBatteryStatus(battery);
                         return (
                           <TableRow key={battery.device_id} className={status.bgColor}>
@@ -580,50 +449,6 @@ export default function Home() {
                       })}
                     </TableBody>
                   </Table>
-                  {groupedBatteries.green.length > itemsPerPage && (
-                    <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                      <div className="text-sm text-muted-foreground">
-                        Showing {((greenPage - 1) * itemsPerPage) + 1} to {Math.min(greenPage * itemsPerPage, groupedBatteries.green.length)} of {groupedBatteries.green.length} items
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setGreenPage(1)}
-                          disabled={greenPage === 1}
-                        >
-                          First
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setGreenPage(greenPage - 1)}
-                          disabled={greenPage === 1}
-                        >
-                          Previous
-                        </Button>
-                        <span className="text-sm px-2">
-                          Page {greenPage} of {Math.ceil(groupedBatteries.green.length / itemsPerPage)}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setGreenPage(greenPage + 1)}
-                          disabled={greenPage >= Math.ceil(groupedBatteries.green.length / itemsPerPage)}
-                        >
-                          Next
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setGreenPage(Math.ceil(groupedBatteries.green.length / itemsPerPage))}
-                          disabled={greenPage >= Math.ceil(groupedBatteries.green.length / itemsPerPage)}
-                        >
-                          Last
-                        </Button>
-                      </div>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             )}

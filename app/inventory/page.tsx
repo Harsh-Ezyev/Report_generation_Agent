@@ -7,11 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { LogoutButton } from "@/components/logout-button";
-import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { DeviceListItem } from "@/lib/query";
-import { useSession } from "next-auth/react";
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -59,19 +56,12 @@ function getBatteryStatus(battery: DeviceListItem): {
 }
 
 export default function InventoryPage() {
-  const { data: session } = useSession();
-  const userRole = (session?.user as any)?.role || "client";
-  const userName = session?.user?.name || "User";
-  const isSuperAdmin = userRole === "super_admin";
-
   const { data: batteries, error, isLoading } = useSWR<DeviceListItem[]>("/api/devices", fetcher, {
     refreshInterval: 300000,
   });
 
   const [deviceQuery, setDeviceQuery] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<"all" | BatteryStatus>("all");
-  const [currentPage, setCurrentPage] = React.useState(1);
-  const itemsPerPage = 20;
 
   const filtered = React.useMemo(() => {
     if (!Array.isArray(batteries)) return [];
@@ -85,34 +75,6 @@ export default function InventoryPage() {
       return matchesDevice && matchesStatus;
     });
   }, [batteries, deviceQuery, statusFilter]);
-
-  // Paginate filtered results
-  const paginatedItems = React.useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filtered.slice(startIndex, endIndex);
-  }, [filtered, currentPage]);
-
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
-
-  // Reset to page 1 when filters change
-  React.useEffect(() => {
-    setCurrentPage(1);
-  }, [deviceQuery, statusFilter]);
-
-  // Generate serial number based on device_id hash
-  const getSerialNumber = React.useCallback((deviceId: string, index: number): string => {
-    // Create a consistent serial number from device_id
-    let hash = 0;
-    for (let i = 0; i < deviceId.length; i++) {
-      const char = deviceId.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    // Format as SN-XXXXX (5 digit number)
-    const serial = Math.abs(hash).toString().padStart(5, '0').slice(0, 5);
-    return `SN-${serial}`;
-  }, []);
 
   if (error) {
     return (
@@ -131,21 +93,10 @@ export default function InventoryPage() {
       <ThemeToggle />
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-4xl font-bold text-foreground">Inventory Management</h1>
-            <div className="flex items-center gap-2 mt-2">
-              <span className="text-sm text-muted-foreground">Logged in as:</span>
-              <Badge variant={isSuperAdmin ? "default" : "secondary"}>
-                {userName} {isSuperAdmin ? "(Super Admin)" : "(Client)"}
-              </Badge>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button asChild variant="outline">
-              <Link href="/">Back to Dashboard</Link>
-            </Button>
-            <LogoutButton />
-          </div>
+          <h1 className="text-4xl font-bold text-foreground">Inventory Management</h1>
+          <Button asChild>
+            <Link href="/">Back to Dashboard</Link>
+          </Button>
         </div>
 
         <Card>
@@ -213,15 +164,13 @@ export default function InventoryPage() {
             <CardHeader>
               <CardTitle>Inventory</CardTitle>
               <CardDescription>
-                Showing {paginatedItems.length} of {filtered.length} items (Page {currentPage} of {totalPages || 1})
-                {filtered.length !== (batteries?.length || 0) && ` • Filtered from ${batteries?.length || 0} total`}
+                {filtered.length} of {batteries?.length || 0} items
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Serial No.</TableHead>
                     <TableHead>Device ID</TableHead>
                     <TableHead>SOC Delta (%)</TableHead>
                     <TableHead>ODO Delta (km)</TableHead>
@@ -231,86 +180,30 @@ export default function InventoryPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedItems.length > 0 ? (
-                    paginatedItems.map((battery, index) => {
-                      const status = getBatteryStatus(battery);
-                      const globalIndex = (currentPage - 1) * itemsPerPage + index;
-                      return (
-                        <TableRow key={battery.device_id} className={status.bgColor}>
-                          <TableCell className="font-mono text-sm">{getSerialNumber(battery.device_id, globalIndex)}</TableCell>
-                          <TableCell className="font-medium">{battery.device_id}</TableCell>
-                          <TableCell>{battery.soc_delta.toFixed(2)}</TableCell>
-                          <TableCell>{battery.odo_delta.toFixed(2)}</TableCell>
-                          <TableCell className="font-semibold">{battery.total_cycles.toFixed(2)}</TableCell>
-                          <TableCell>
-                            <span className={status.color}>{status.label}</span>
-                          </TableCell>
-                          <TableCell>
-                            <Link
-                              href={`/device/${encodeURIComponent(battery.device_id)}`}
-                              className="text-blue-600 dark:text-blue-400 hover:underline"
-                            >
-                              View Details
-                            </Link>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                        No devices found
-                      </TableCell>
-                    </TableRow>
-                  )}
+                  {filtered.map((battery) => {
+                    const status = getBatteryStatus(battery);
+                    return (
+                      <TableRow key={battery.device_id} className={status.bgColor}>
+                        <TableCell className="font-medium">{battery.device_id}</TableCell>
+                        <TableCell>{battery.soc_delta.toFixed(2)}</TableCell>
+                        <TableCell>{battery.odo_delta.toFixed(2)}</TableCell>
+                        <TableCell className="font-semibold">{battery.total_cycles.toFixed(2)}</TableCell>
+                        <TableCell>
+                          <span className={status.color}>{status.label}</span>
+                        </TableCell>
+                        <TableCell>
+                          <Link
+                            href={`/device/${encodeURIComponent(battery.device_id)}`}
+                            className="text-blue-600 dark:text-blue-400 hover:underline"
+                          >
+                            View Details
+                          </Link>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
-
-              {/* Pagination Controls */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                  <div className="text-sm text-muted-foreground">
-                    Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} items
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(1)}
-                      disabled={currentPage === 1}
-                    >
-                      First
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(currentPage - 1)}
-                      disabled={currentPage === 1}
-                    >
-                      Previous
-                    </Button>
-                    <span className="text-sm px-2">
-                      Page {currentPage} of {totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(currentPage + 1)}
-                      disabled={currentPage === totalPages}
-                    >
-                      Next
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(totalPages)}
-                      disabled={currentPage === totalPages}
-                    >
-                      Last
-                    </Button>
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
         )}
